@@ -2,42 +2,42 @@ name: "sast-scan"
 
 on:
   push:
-    branches:
-      - githubcicd
+    branches: [githubcicd]
 
 jobs:
-  test:
+  sast:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
 
       - name: Install dependencies
         run: npm ci --force
 
-      - name: Install OWASP Dependency-Check
+      - name: Download OWASP Dependency-Check
         run: |
-          VERSION=$(curl -s https://dependency-check.github.io/DependencyCheck/current.txt)
-          echo "Using Dependency-Check version $VERSION"
-          curl -Ls \
-            "https://github.com/dependency-check/DependencyCheck/releases/download/v$VERSION/dependency-check-$VERSION-release.zip" \
-            -o dependency-check.zip
-          unzip -q dependency-check.zip
+          wget https://github.com/dependency-check/DependencyCheck/releases/download/v12.1.1/dependency-check-12.1.1-release.zip
+          unzip -q dependency-check-12.1.1-release.zip -d $HOME/dependency-check
 
-      - name: Run scan with ODC
+      - name: Run OWASP Dependency-Check
         run: |
-          dependency-check/bin/dependency-check.sh \
+          chmod +x $HOME/dependency-check/dependency-check/bin/dependency-check.sh
+          $HOME/dependency-check/dependency-check/bin/dependency-check.sh \
             --project "bitcoin" \
+            --nvdApiKey ${{ secrets.WORKSHOP6_NVD_API_KEY }} \
+            --out . \
             --scan . \
-            --format HTML \
-            --out odc-report \
             --disableOssIndex
 
       - name: Archive SAST report
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: sast-report
-          path: odc-report/
-          if-no-files-found: warn
+          path: ./dependency-check-report.html
+
