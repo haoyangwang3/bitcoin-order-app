@@ -2,37 +2,42 @@ name: "sast-scan"
 
 on:
   push:
-    branches: [githubcicd]
+    branches:
+      - githubcicd
 
 jobs:
   test:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        node-version: [16.x]
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout source code
+        uses: actions/checkout@v4
 
-      - name: Install Dependencies
-        if: steps.cache-nodemodules.outputs.cache-hit != 'true'
-        run: |
-          npm ci --force
+      - name: Install dependencies
+        run: npm ci --force
 
-      - name: OWASP Dependency Check
+      - name: Install OWASP Dependency-Check
         run: |
-          wget https://github.com/jeremylong/DependencyCheck/releases/download/v7.2.0/dependency-check-7.2.0-release.zip
-          unzip dependency-check-7.2.0-release.zip
+          VERSION=$(curl -s https://dependency-check.github.io/DependencyCheck/current.txt)
+          echo "Using Dependency-Check version $VERSION"
+          curl -Ls \
+            "https://github.com/dependency-check/DependencyCheck/releases/download/v$VERSION/dependency-check-$VERSION-release.zip" \
+            -o dependency-check.zip
+          unzip -q dependency-check.zip
 
       - name: Run scan with ODC
         run: |
-          dependency-check/bin/dependency-check.sh --project "bitcoin" --scan . > ODC-report
+          dependency-check/bin/dependency-check.sh \
+            --project "bitcoin" \
+            --scan . \
+            --format HTML \
+            --out odc-report \
+            --disableOssIndex
 
-      - name: Archive production artifacts
+      - name: Archive SAST report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sast report
-          path: |
-            ./ODC-report
-
+          name: sast-report
+          path: odc-report/
+          if-no-files-found: warn
